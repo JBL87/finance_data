@@ -37,13 +37,12 @@ df_short = pd.DataFrame() # 가장 최근값 테이블
 df_5yr = pd.DataFrame() # 5년 평균 테이블
 df_tables = pd.DataFrame() # 페이지 아래에 있는 전체 표(연환산,연간,분기)
 #----------------------------------------------------------------
-# 저장할 폴더
-folder_fn = r"C:\Users\bong2\OneDrive\DataArchive\DB_주식관련\FNGUIDE\\"
-folder_fn_backup = r"C:\Users\bong2\OneDrive\DataArchive\DB_주식관련\FNGUIDE\0_backup\\"
-folder_naver = r"C:\Users\bong2\OneDrive\DataArchive\DB_주식관련\Naver증권\\"
-folder_naver_backup = r"C:\Users\bong2\OneDrive\DataArchive\DB_주식관련\Naver증권\0_backup\\"
-folder_itooza = r"C:\Users\bong2\OneDrive\DataArchive\DB_주식관련\아이투자\\"
-folder_itooza_backup = r"C:\Users\bong2\OneDrive\DataArchive\DB_주식관련\아이투자\0_backup\\"
+folder_fn = conn_db.get_path('folder_fn')
+folder_fn_backup = conn_db.get_path('folder_fn_backup')
+folder_naver = conn_db.get_path('folder_naver')
+folder_naver_backup = conn_db.get_path('folder_naver_backup')
+folder_itooza = conn_db.get_path('folder_itooza')
+folder_itooza_backup = conn_db.get_path('folder_itooza_backup')
 
 def clean_numeric_value(df): # ['값'] 컬럼을 문자열에서 숫자로 수정
     try:
@@ -102,9 +101,9 @@ def merge_df_all_numbers(): # 아이투자, naver, fnguide 합쳐진 하나의 d
     df = df.merge(industry_per, on='업종_naver', how='left')
 
     # 합친것 저장
-    df.to_pickle(conn_db.get_path('장기투자지표_취합본+기업정보총괄'+'.pkl'))
+    df.to_pickle(conn_db.get_path('장기투자지표_취합본+기업정보총괄')+'.pkl')
     conn_db.to_(df, 'Gfinance_시장data', 'import_장기투자지표_취합본+기업정보총괄')
-    print('장기투자지표 취합본 저장완료')
+    
 #--------------------------------------------------------------------------------------------------------------------
 #FN GUIDE 재무제표
 def get_fs_from_fnguide(dom, tp, fstype):  # fnguide 재무제표 가져오기
@@ -195,8 +194,8 @@ def get_all_fs_from_fnguide(code):  # fnguide 재무제표 가져오기
 @helper.timer
 def update_fnguide_fs(param='all'):  # fnguide 재무제표 업데이트
     global code_list
-    global max_workers 
-    file = conn_db.get_path('fs_from_fnguide_raw'+".pkl")
+    global max_workers
+    file = conn_db.get_path('fs_from_fnguide_raw')+".pkl"
     if param=='all':
         with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
             result = executor.map(get_all_fs_from_fnguide, code_list)
@@ -215,7 +214,7 @@ def update_fnguide_fs(param='all'):  # fnguide 재무제표 업데이트
     df = drop_duplicate_rows(df, old_df, cols)
     df = df[df['종목코드'].isin(code_list)].copy()
     # 새로 합쳐진것 저장
-    df.to_pickle(file)  
+    df.to_pickle(file)
     #--------------------------------------------------------------------------------------------------------------------
 #FN GUIDE 재무비율
 def get_fsratio_from_fnguide(code):  # fnguide 재무비율 가져오기
@@ -309,7 +308,7 @@ def update_fnguide_fsratio(param='all'):  # fnguide 재무비율 업데이트
         print('업데이트할 내역 없음')
     #----------- ----------- ----------- ----------- ----------- ----------- ----------- -----------
 def clean_fsratio_from_fnguide(): # fnguide 재무비율 전처리
-    df = pd.read_pickle(file = conn_db.get_path('fsratio_from_fnguide_raw')+'.pkl')
+    df = pd.read_pickle(conn_db.get_path('fsratio_from_fnguide_raw')+'.pkl')
     # KEY컬럼 만들기
     df = helper.make_keycode(df)
     #------------------------------------------------------------------------------------
@@ -910,7 +909,7 @@ def update_fnguide_company_info(param='all'):
             df.loc[df['날짜'].str.contains('(P)'), ['날짜']] = dates
         except:
             pass
-        
+
         # 실적/전망 컬럼 생성
         for expect in ['E','P']:
             if df['날짜'].str.contains(expect).sum()>0:
@@ -1434,6 +1433,7 @@ def update_itooza_fsratio(param='all'): # 5개년 주요 투자지표 업데이�
     print('(전체 완료. 소요시간: ' + str(helper.now_time() - start_time)+")")
     # 아이투자 지표정리------------- ------------- ------------- ------------- ------------- ------------- --------------
 
+@helper.timer
 def clean_itooza_longterm_indexes(): # 장기지표 평균치와 최근 지표 테이블 정리
     start_time = helper.now_time()
     print('아이투자 시계열 지표 계산해서 합치기 작업 시작 ' + helper.now_time().strftime('%Y-%m-%d %H:%M:%S'))
@@ -1446,8 +1446,7 @@ def clean_itooza_longterm_indexes(): # 장기지표 평균치와 최근 지표 �
     df_all.columns.name=None
 
     #----------- ----------- ----------- ----------- ----------- ----------- ----------- ----------- ----------- -----------
-    # df_series = pd.read_pickle(folder_itooza_backup + "0_아이투자_시계열_원본취합본.pkl")
-    df_series = conn_db.from_('from_아이투자','아이투자_시계열_원본취합본')
+    df_series = pd.read_pickle(folder_itooza_backup + "0_아이투자_시계열_원본취합본.pkl")
     # 1. 연간의 경우 분기값이 포함되어 있는 경우가 있기 때문에 삭제해 주어야함
     # 삭제 방법은 가장 마지막에 위치한 날짜의 월 부분이 결산월과 일치하면 keep, 아니면 제외
     df_not_year = df_series[(df_series['기준']!='연간')] # 연간이 아닌 것만 들어 있는 df
@@ -1468,10 +1467,11 @@ def clean_itooza_longterm_indexes(): # 장기지표 평균치와 최근 지표 �
     df_year.drop(columns='key', inplace=True) # 작업하기 위해 임시로 만들었던 컬럼 삭제
     df_series = pd.concat([df_year, df_not_year]).reset_index(drop=True) # 다시 전체 df만들기
 
+    #----------- ----------- ----------- ----------- -----------
     # 날짜에 '월'만 있는 행이 생겨서 삭제
     filt = df_series['날짜'] != '월'
     df_series = df_series.loc[filt].copy()
-    #----------- ----------- ----------- ----------- ----------- ----------- ----------- ----------- ----------- -----------
+
     df_temp = df_series.copy()
     matcher = ['ROE', '률']
     all_cols = df_temp.columns.tolist()
@@ -1487,7 +1487,7 @@ def clean_itooza_longterm_indexes(): # 장기지표 평균치와 최근 지표 �
     del exclude_list, filt, df_year_temp, co_info_fiscal_year, df_year, df_not_year, df_temp
     print('아이투자 시계열용 저장완료')
 
-    #----------- ----------- ----------- ----------- ----------- ----------- ----------- ----------- ----------- -----------
+    #----------- ----------- ----------- ----------- -----------
     '''
     시계열 파일에서 ['10년치평균값', '10분기연환산평균값', '최근연환산값', '최근연간값', '최근분기값']를 계산해야함
     그리고 5년치와 최근4분기치와 합쳐서 모든 지표가 들어가 있는 테이블을 만든다
@@ -1495,6 +1495,7 @@ def clean_itooza_longterm_indexes(): # 장기지표 평균치와 최근 지표 �
     # 2. 10년치 평균값과 10분기 연환산 평균값 구하기
     use_cols = ['종목코드', '기준','날짜', 'PBR', 'PER', 'ROE', '순이익률',
                 '영업이익률', '주당순이익(EPS,개별)', '주당순이익(EPS,연결지배)', '주당순자산(지분법)']
+
     df = df_series[use_cols] # 10년평균 구할수 있는 값만 선택
     # 연환산 10Q와 연간10Y 평균값 가져오기 (최대/최소값은 제외)
     term_types = ['연환산','연간']
@@ -1527,16 +1528,19 @@ def clean_itooza_longterm_indexes(): # 장기지표 평균치와 최근 지표 �
     df_all = df_all.merge(result_df, on='종목코드', how='outer')
     del temp_all, temp, result_df
     print('아이투자 10년치 평균값과 10분기 연환산 평균값 구하는 작업완료')
-    #----------- ----------- ----------- ----------- ----------- ----------- ----------- ----------- ----------- -----------
+
+    #----------- ----------- ----------- ----------- -----------
     # 3. 연환산, 연간, 분기의 가장 최근에 있는 값만 가져오기
     # 필요한 컬럼만 필터링하고 날짜순으로 정렬
     use_cols = ['날짜', '기준','종목코드', 'PBR','PER','ROE', '순이익률', '영업이익률',
                 '주당순이익(EPS,개별)', '주당순이익(EPS,연결지배)', '주당순자산(지분법)']
     df = df_series.loc[:, use_cols].sort_values(by='날짜', ascending=False)
+
     # 기준별로 가장 최근 날짜만 선택
     df = df.groupby(['종목코드', '기준'], as_index=False).head(1)
     df = df.melt(id_vars=['날짜','기준','종목코드'], value_name='값', var_name=['항목']) # tidy로 수정
     df = df.sort_values(by='날짜', ascending=False) # 날짜 순으로 정렬
+
     # 항목이름 뒤에 날짜기준 추가하기
     term_type_name = {'연환산':'_최근연환산', '연간':'_최근Y', '분기': '_최근Q'}
     df['항목'] = df['항목'] + [term_type_name[x] for x in df['기준']]
@@ -1548,7 +1552,8 @@ def clean_itooza_longterm_indexes(): # 장기지표 평균치와 최근 지표 �
     df_all = df_all.merge(df, on='종목코드', how='outer').reset_index(drop=True)
     del df, df_series
     print('아이투자 연환산 / 연간 / 분기에서 가장 최근값만 가져오기 작업완료')
-    #----------- ----------- ----------- ----------- ----------- ----------- ----------- ----------- ----------- -----------
+
+    #----------- ----------- ----------- ----------- -----------
     matcher = ['ROE', '률']
     all_cols = df_all.columns.tolist()
     prcnt_cols = [col for col in all_cols if any(prcnt in col for prcnt in matcher)]
@@ -1577,18 +1582,16 @@ def clean_itooza_longterm_indexes(): # 장기지표 평균치와 최근 지표 �
     for col in all_cols:
         if col in col_name_change:
             df_all.rename(columns={col: col_name_change[col]}, inplace=True)
-    #----------- ----------- ----------- ----------- ----------- ----------- ----------- ----------- ----------- -----------
+
+    #----------- ----------- ----------- ----------- -----------
     # DB_기업정보 FS_update_list에 있는 코드만 필터링
     global code_list
     df_all = df_all[df_all['종목코드'].isin(code_list)].copy()
     df_all = helper.make_keycode(df_all).drop(columns=['종목명', '종목코드'])
 
     df_all.to_pickle(folder_itooza + '장기투자지표_취합본.pkl')
-    print('아이투자 장기 투자지표 저장 완료')
-    print('(소요시간: ' + str(helper.now_time() - start_time)+")")
-    del df_all
     merge_df_all_numbers() # 전체 취합본 업데이트
-    #--------------------------------------------------------------------------------------------------------------------
+
 #아이투자 기업정보------------- ------------- -------------  ------------- ------------- ------------- --------------
 def get_itooza_company_description(code):
     global company_description  # 전체 내용있는것
@@ -1654,8 +1657,7 @@ def update_itooza_company_description(param='all'):
     # global raw_material_1_df   # 원재료_가로형
     # global raw_material_2_df  # 원재료_세로형
     # global product_1_df  # 제품_가로형
-    # global product_2_df  # 제품_세로형
-    print('아이투자 기업정보 가져오기 시작 ' + start_time.strftime('%Y-%m-%d %H:%M:%S'))
+    # global product_2_df  # 제품_세로형 
     # with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
     #     executor.map(get_itooza_company_description, code_list)
     if param !='all':
@@ -1663,30 +1665,30 @@ def update_itooza_company_description(param='all'):
         old = conn_db.from_("DB_기업정보", 'from_아이투자_기업정보')['종목코드']
         new_code_list = list(set(new) - set(old))
         if len(new_code_list)>0:
-            dummy = [get_itooza_company_description(code) for code in new_code_list]
+            [get_itooza_company_description(code) for code in new_code_list]
         else:
             print('업데이트할 내역 없음')
         del new, old, new_code_list
     else:
-        dummy = [get_itooza_company_description(code) for code in code_list]
-    # 전체 내용있는것------- ------- ------- ------- ------- ------- ------- -------
-    try:
-        del dummy
-    except:
-        pass
+        [get_itooza_company_description(code) for code in code_list]
+        
+    # 전체 내용있는것------- ------- ------- ------- ------- ------- ------- ------- 
     if len(company_description)>=0:
         print('가져오기 완료. 전처리 시작')
         try:
             company_description = helper.make_keycode(company_description.reset_index(drop=True))
         except: # 새로 가져온 것이 없을 경우 그냥 pass
             pass
+
         # 가장 최근 파일이 위로 가도록 순서 정렬해서 취합하고 과거 df랑 중복 되는거 삭제
         company_description['내용'] = company_description['내용'].apply(lambda x : x.replace('▷ ','\n▷ ' ).strip() if '▷ 'in x else x.replace('▷','\n▷ ' ).strip() if '▷' in x else x )
         old_df = conn_db.from_('DB_기업정보', 'from_아이투자_기업정보')
         cols = ['구분', 'KEY']
         company_description = drop_duplicate_rows(company_description, old_df, cols)
         conn_db.to_(company_description, 'DB_기업정보', 'from_아이투자_기업정보')
-        col_name_dict = {'주요제품':'제품명', '원재료':'원재료'}
+        col_name_dict = {'주요제품':'제품명', 
+                        '원재료':'원재료'}
+
         for col_names in col_name_dict.keys():
             col_name = col_name_dict[col_names]
             df_temp = company_description[company_description['구분']==col_names].reset_index(drop=True)
@@ -1760,9 +1762,7 @@ def update_itooza_company_description(param='all'):
         #------- ------- -------
         # , raw_material_1_df, raw_material_2_df, product_1_df, product_2_df
         import co_info as co
-        co.get_all_co_info() # 전체 취합본 업데이트 해놓기
-        print('아이투자 기업정보 가져오기 완료 ' + helper.now_time().strftime('%Y-%m-%d %H:%M:%S'))
-        print('소요시간: ' + str(helper.now_time() - start_time))
+        co.get_all_co_info() # 전체 취합본 업데이트 해놓기 
     else:
         print('업데이트할 내역 없음')
 #--------------------------------------------------------------------------------------------------------------------
